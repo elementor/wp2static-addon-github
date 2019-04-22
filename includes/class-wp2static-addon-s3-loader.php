@@ -1,6 +1,6 @@
 <?php
 
-class Wp2static_Addon_S3_Loader {
+class Wp2static_Addon_GitHub_Loader {
 
 	protected $actions;
 	protected $filters;

@@ -1,42 +1,42 @@
 <?php
 
-class WP2Static_S3 extends WP2Static_SitePublisher {
+class WP2Static_GitHub extends WP2Static_SitePublisher {
 
     public function __construct() {
         // calling outside WP chain, need to specify this
         // Add-on's option keys
         $deploy_keys = array(
-          's3',
+          'github',
           array(
-            'baseUrl-s3',
+            'baseUrl-github',
             'cfDistributionId',
-            's3Bucket',
-            's3Key',
-            's3Region',
-            's3RemotePath',
-            's3Secret',
+            'githubBucket',
+            'githubKey',
+            'githubRegion',
+            'githubRemotePath',
+            'githubSecret',
           ),
         );
 
-        $this->loadSettings( 's3', $deploy_keys );
+        $this->loadSettings( 'github', $deploy_keys );
 
         $this->previous_hashes_path =
             $this->settings['wp_uploads_path'] .
-                '/WP2STATIC-S3-PREVIOUS-HASHES.txt';
+                '/WP2STATIC-GitHub-PREVIOUS-HASHES.txt';
 
         if ( defined( 'WP_CLI' ) ) {
             return; }
 
         switch ( $_POST['ajax_action'] ) {
-            case 'test_s3':
-                $this->test_s3();
+            case 'test_github':
+                $this->test_github();
                 break;
-            case 's3_prepare_export':
+            case 'github_prepare_export':
                 $this->bootstrap();
                 $this->loadArchive();
                 $this->prepareDeploy();
                 break;
-            case 's3_transfer_files':
+            case 'github_transfer_files':
                 $this->bootstrap();
                 $this->loadArchive();
                 $this->upload_files();
@@ -76,13 +76,13 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
             if ( ! is_file( $local_file ) ) {
                 continue; }
 
-            if ( isset( $this->settings['s3RemotePath'] ) ) {
+            if ( isset( $this->settings['githubRemotePath'] ) ) {
                 $this->target_path =
-                    $this->settings['s3RemotePath'] . '/' . $this->target_path;
+                    $this->settings['githubRemotePath'] . '/' . $this->target_path;
             }
 
             $this->logAction(
-                "Uploading {$local_file} to {$this->target_path} in S3"
+                "Uploading {$local_file} to {$this->target_path} in GitHub"
             );
 
             $this->local_file_contents = file_get_contents( $local_file );
@@ -99,7 +99,7 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
                     );
 
                     try {
-                        $this->put_s3_object(
+                        $this->put_github_object(
                             $this->target_path .
                                     basename( $local_file ),
                             $this->local_file_contents,
@@ -121,7 +121,7 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
                 );
 
                 try {
-                    $this->put_s3_object(
+                    $this->put_github_object(
                         $this->target_path .
                                 basename( $local_file ),
                         $this->local_file_contents,
@@ -148,9 +148,9 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
         }
     }
 
-    public function test_s3() {
+    public function test_github() {
         try {
-            $this->put_s3_object(
+            $this->put_github_object(
                 '.tmp_wp2static.txt',
                 'Test WP2Static connectivity',
                 'text/plain'
@@ -164,25 +164,25 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
                 '/../static-html-output-plugin' .
                 '/plugin/WP2Static/WsLog.php';
 
-            WsLog::l( 'S3 ERROR RETURNED: ' . $e );
-            echo "There was an error testing S3.\n";
+            WsLog::l( 'GitHub ERROR RETURNED: ' . $e );
+            echo "There was an error testing GitHub.\n";
         }
     }
 
-    public function put_s3_object( $s3_path, $content, $content_type ) {
+    public function put_github_object( $github_path, $content, $content_type ) {
         // NOTE: quick fix for #287
-        $s3_path = str_replace( '@', '%40', $s3_path );
+        $github_path = str_replace( '@', '%40', $github_path );
 
-        $this->logAction( "PUT'ing file to {$s3_path} in S3" );
+        $this->logAction( "PUT'ing file to {$github_path} in GitHub" );
 
-        $host_name = $this->settings['s3Bucket'] . '.s3.' .
-            $this->settings['s3Region'] . '.amazonaws.com';
+        $host_name = $this->settings['githubBucket'] . '.github.' .
+            $this->settings['githubRegion'] . '.amazonaws.com';
 
-        $this->logAction( "Using S3 Endpoint {$host_name}" );
+        $this->logAction( "Using GitHub Endpoint {$host_name}" );
 
         //$content_acl = 'public-read';
-        $content_title = $s3_path;
-        $aws_service_name = 's3';
+        $content_title = $github_path;
+        $aws_service_name = 'github';
         $timestamp = gmdate( 'Ymd\THis\Z' );
         $date = gmdate( 'Ymd' );
 
@@ -194,8 +194,8 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
         //$request_headers['x-amz-acl'] = $content_acl;
         $request_headers['x-amz-content-sha256'] = hash( 'sha256', $content );
 
-        if ( ! empty( $this->settings[ 's3CacheControl' ] ) ) {
-            $max_age = $this->settings[ 's3CacheControl' ];
+        if ( ! empty( $this->settings[ 'githubCacheControl' ] ) ) {
+            $max_age = $this->settings[ 'githubCacheControl' ];
             $request_headers['Cache-Control'] = 'max-age=' . $max_age;
         }
 
@@ -231,7 +231,7 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
 
         $scope = array();
         $scope[] = $date;
-        $scope[] = $this->settings['s3Region'];
+        $scope[] = $this->settings['githubRegion'];
         $scope[] = $aws_service_name;
         $scope[] = 'aws4_request';
 
@@ -243,17 +243,17 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
         $string_to_sign = implode( "\n", $string_to_sign );
 
         // Signing key
-        $k_secret = 'AWS4' . $this->settings['s3Secret'];
+        $k_secret = 'AWS4' . $this->settings['githubSecret'];
         $k_date = hash_hmac( 'sha256', $date, $k_secret, true );
         $k_region =
-            hash_hmac( 'sha256', $this->settings['s3Region'], $k_date, true );
+            hash_hmac( 'sha256', $this->settings['githubRegion'], $k_date, true );
         $k_service = hash_hmac( 'sha256', $aws_service_name, $k_region, true );
         $k_signing = hash_hmac( 'sha256', 'aws4_request', $k_service, true );
 
         $signature = hash_hmac( 'sha256', $string_to_sign, $k_signing );
 
         $authorization = [
-            'Credential=' . $this->settings['s3Key'] . '/' .
+            'Credential=' . $this->settings['githubKey'] . '/' .
                 implode( '/', $scope ),
             'SignedHeaders=' . $signed_headers,
             'Signature=' . $signature,
@@ -270,7 +270,7 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
 
         $url = 'http://' . $host_name . '/' . $content_title;
 
-        $this->logAction( "S3 URL: {$url}" );
+        $this->logAction( "GitHub URL: {$url}" );
 
         $ch = curl_init( $url );
 
@@ -337,8 +337,8 @@ class WP2Static_S3 extends WP2Static_SitePublisher {
         }
 
         $distribution = $this->settings['cfDistributionId'];
-        $access_key = $this->settings['s3Key'];
-        $secret_key = $this->settings['s3Secret'];
+        $access_key = $this->settings['githubKey'];
+        $secret_key = $this->settings['githubSecret'];
 
         $epoch = date( 'U' );
 
@@ -415,4 +415,4 @@ EOD;
     }
 }
 
-$s3 = new WP2Static_S3();
+$github = new WP2Static_GitHub();
