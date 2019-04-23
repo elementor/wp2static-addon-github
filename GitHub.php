@@ -7,12 +7,11 @@ class WP2Static_GitHub extends WP2Static_SitePublisher {
           'github',
           array(
             'baseUrl-github',
-            'cfDistributionId',
-            'githubBucket',
-            'githubKey',
-            'githubRegion',
-            'githubRemotePath',
-            'githubSecret',
+            'ghBranch',
+            'ghCommitMessage',
+            'ghPath',
+            'ghRepo',
+            'ghToken',
           ),
         );
 
@@ -56,8 +55,6 @@ class WP2Static_GitHub extends WP2Static_SitePublisher {
             echo 'ERROR';
             die();
         }
-
-        $this->initiateProgressIndicator();
 
         $batch_size = $this->settings['deployBatchSize'];
 
@@ -121,8 +118,6 @@ class WP2Static_GitHub extends WP2Static_SitePublisher {
                     $this->local_file_contents
                 );
             }
-
-            $this->updateProgress();
         }
 
         $this->writeFilePathAndHashesToFile();
