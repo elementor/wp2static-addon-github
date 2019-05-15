@@ -1,6 +1,6 @@
 {
-    "name": "wp2static/wp2static-addon-netlify",
-    "description": "Netlify deployment Add-on for WP2Static.",
+    "name": "wp2static/wp2static-addon-github",
+    "description": "GitHub deployment Add-on for WP2Static.",
     "homepage": "https://wp2static.com",
       "license": "UNLICENSE",
       "authors": [
@@ -12,10 +12,10 @@
       ],
     "type": "wordpress-plugin",
     "support": {
-        "issues": "https://github.com/WP2Static/wp2static-addon-netlify/issues",
+        "issues": "https://github.com/WP2Static/wp2static-addon-github/issues",
         "forum": "https://wp2static.com/community",
         "docs": "https://wp2static.com/documentation",
-        "source": "https://github.com/WP2Static/wp2static-addon-netlify"
+        "source": "https://github.com/WP2Static/wp2static-addon-github"
     },
     "repositories": [
         {

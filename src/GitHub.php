@@ -1,6 +1,8 @@
 <?php
 
-class WP2Static_GitHub extends WP2Static_SitePublisher {
+namespace WP2Static;
+
+class GitHub extends SitePublisher {
 
     public function __construct() {
         $deploy_keys = array(
