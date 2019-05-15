@@ -17,9 +17,9 @@ if ( ! defined( 'WPINC' ) ) {
 	die;
 }
 
-define( 'WP2STATIC_NETLIFY_PATH', plugin_dir_path( __FILE__ ) );
+define( 'WP2STATIC_GITHUB_PATH', plugin_dir_path( __FILE__ ) );
 
-require WP2STATIC_NETLIFY_PATH . 'vendor/autoload.php';
+require WP2STATIC_GITHUB_PATH . 'vendor/autoload.php';
 
 // @codingStandardsIgnoreStart
 $ajax_action = isset( $_POST['ajax_action'] ) ? $_POST['ajax_action'] : '';
@@ -29,7 +29,7 @@ $ajax_action = isset( $_POST['ajax_action'] ) ? $_POST['ajax_action'] : '';
 if ( $ajax_action == 'test_github' ) {
     $github = new WP2Static\GitHub;
 
-    $github->test_github();
+    $github->test_upload();
 
     wp_die();
     return null;
@@ -45,14 +45,7 @@ if ( $ajax_action == 'test_github' ) {
     $github = new WP2Static\GitHub;
 
     $github->bootstrap();
-    $github->github_transfer_files();
-
-    wp_die();
-    return null;
-} elseif ( $ajax_action == 'cloudfront_invalidate_all_items' ) {
-    $github = new WP2Static\GitHub;
-
-    $github->cloudfront_invalidate_all_items();
+    $github->upload_files();
 
     wp_die();
     return null;

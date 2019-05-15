@@ -2,52 +2,30 @@
 
 namespace WP2Static;
 
+use Exception;
+
 class GitHub extends SitePublisher {
 
     public function __construct() {
-        $deploy_keys = array(
-          'github',
-          array(
-            'baseUrl-github',
-            'ghBranch',
-            'ghCommitMessage',
-            'ghPath',
-            'ghRepo',
-            'ghToken',
-          ),
-        );
-
-        $this->loadSettings( 'github', $deploy_keys );
-
-        list($this->user, $this->repository) = explode(
-            '/',
-            $this->settings['ghRepo']
-        );
+        $plugin = Controller::getInstance();
 
         $this->api_base = 'https://api.github.com/repos/';
-
+        $this->batch_size =
+            $plugin->options->getOption( 'deployBatchSize' );
+        $this->gh_branch =
+            $plugin->options->getOption( 'ghBranch' );
+        $this->gh_commit_message =
+            $plugin->options->getOption( 'ghCommitMessage' );
+        $this->gh_path =
+            $plugin->options->getOption( 'ghPath' );
+        $this->gh_repo =
+            $plugin->options->getOption( 'ghRepo' );
+        $this->gh_token =
+            $plugin->options->getOption( 'ghToken' );
         $this->previous_hashes_path =
-            $this->settings['wp_uploads_path'] .
-                '/WP2STATIC-GITHUB-PREVIOUS-HASHES.txt';
-
-        if ( defined( 'WP_CLI' ) ) {
-            return; }
-
-        switch ( $_POST['ajax_action'] ) {
-            case 'github_prepare_export':
-                $this->bootstrap();
-                $this->loadArchive();
-                $this->prepareDeploy( true );
-                break;
-            case 'github_upload_files':
-                $this->bootstrap();
-                $this->loadArchive();
-                $this->upload_files();
-                break;
-            case 'test_github':
-                $this->test_upload();
-                break;
-        }
+            SiteInfo::getPath( 'uploads' ) .
+            'wp2static-working-files/' .
+            '/GITHUB-PREVIOUS-HASHES.txt';
     }
 
     public function upload_files() {
@@ -58,39 +36,49 @@ class GitHub extends SitePublisher {
             die();
         }
 
-        $batch_size = $this->settings['deployBatchSize'];
-
-        if ( $batch_size > $this->files_remaining ) {
-            $batch_size = $this->files_remaining;
+        if ( $this->batch_size > $this->files_remaining ) {
+            $this->batch_size = $this->files_remaining;
         }
 
-        $lines = $this->getItemsToDeploy( $batch_size );
+        $this->client = new Request();
+
+        $lines = $this->getItemsToDeploy( $this->batch_size );
 
         $this->openPreviousHashesFile();
 
         foreach ( $lines as $line ) {
-            list($local_file, $this->target_path) = explode( ',', $line );
+            list($this->local_file, $this->target_path) = explode( ',', $line );
 
-            $local_file = $this->archive->path . $local_file;
+            $this->local_file = '/' .
+                $this->local_file;
 
-            if ( ! is_file( $local_file ) ) {
-                continue; }
+            if ( ! is_file( $this->local_file ) ) {
+                $err = 'COULDN\'T FIND LOCAL FILE TO DEPLOY: ' .
+                    $this->local_file;
+                WsLog::l( $err );
+                throw new Exception( $err );
+            }
 
-            if ( isset( $this->settings['ghPath'] ) ) {
+            if ( isset( $this->gh_path ) ) {
                 $this->target_path =
-                    $this->settings['ghPath'] . '/' . $this->target_path;
+                    $this->gh_path . '/' .
+                        $this->target_path;
             }
 
             $this->logAction(
                 "Uploading {$local_file} to {$this->target_path} in GitHub"
             );
 
-            $this->local_file_contents = file_get_contents( $local_file );
+            $this->local_file_contents = file_get_contents( $this->local_file );
 
-            if ( isset( $this->file_paths_and_hashes[ $this->target_path ] ) ) {
-                $prev = $this->file_paths_and_hashes[ $this->target_path ];
+            $this->hash_key =
+                $this->target_path . basename( $this->local_file );
+
+            if ( isset( $this->file_paths_and_hashes[ $this->hash_key ] ) ) {
+                $prev = $this->file_paths_and_hashes[ $this->hash_key ];
                 $current = crc32( $this->local_file_contents );
 
+                // current file different than previous deployed one
                 if ( $prev != $current ) {
                     if ( $this->fileExistsInGitHub() ) {
                         $this->updateFileInGitHub();
@@ -133,7 +121,7 @@ class GitHub extends SitePublisher {
 
     public function test_upload() {
         try {
-            $this->remote_path = $this->api_base . $this->settings['ghRepo'] .
+            $this->remote_path = $this->api_base . $this->gh_repo .
                 '/contents/' . '.WP2Static/' . uniqid();
 
             $b64_file_contents = base64_encode( 'WP2Static test upload' );
@@ -153,7 +141,7 @@ class GitHub extends SitePublisher {
             $post_options = array(
                 'message' => 'Test WP2Static connectivity',
                 'content' => $b64_file_contents,
-                'branch' => $this->settings['ghBranch'],
+                'branch' => $this->gh_branch,
             );
 
             curl_setopt(
@@ -167,7 +155,7 @@ class GitHub extends SitePublisher {
                 CURLOPT_HTTPHEADER,
                 array(
                     'Authorization: ' .
-                        'token ' . $this->settings['ghToken'],
+                        'token ' . $this->gh_token,
                 )
             );
 
@@ -186,17 +174,13 @@ class GitHub extends SitePublisher {
             );
 
             if ( ! in_array( $status_code, $good_response_codes ) ) {
-                require_once dirname( __FILE__ ) .
-                    '/../WP2Static/WsLog.php';
                 WsLog::l(
                     'BAD RESPONSE STATUS (' . $status_code . '): '
                 );
-
+                error_log( $this->remote_path );
                 throw new Exception( 'GitHub API bad response status' );
             }
         } catch ( Exception $e ) {
-            require_once dirname( __FILE__ ) .
-                '/../WP2Static/WsLog.php';
             WsLog::l( 'GITHUB EXPORT: error encountered' );
             WsLog::l( $e );
             throw new Exception( $e );
@@ -209,13 +193,13 @@ class GitHub extends SitePublisher {
     }
 
     public function fileExistsInGitHub() {
-        $this->remote_path = $this->api_base . $this->settings['ghRepo'] .
+        $this->remote_path = $this->api_base . $this->gh_repo .
             '/contents/' . $this->target_path;
         // GraphQL query to get sha of existing file
         $this->query = <<<JSON
 query{
   repository(owner: "{$this->user}", name: "{$this->repository}") {
-    object(expression: "{$this->settings['ghBranch']}:{$this->target_path}") {
+    object(expression: "{$this->gh_branch}:{$this->target_path}") {
       ... on Blob {
         oid
         byteSize
@@ -224,9 +208,7 @@ query{
   }
 }
 JSON;
-        require_once dirname( __FILE__ ) .
-            '/../WP2Static/Request.php';
-        $this->client = new WP2Static_Request();
+        $this->client = new Request();
 
         $post_options = array(
             'query' => $this->query,
@@ -235,7 +217,7 @@ JSON;
 
         $headers = array(
             'Authorization: ' .
-                    'token ' . $this->settings['ghToken'],
+                    'token ' . $this->gh_token,
         );
 
         $this->client->postWithJSONPayloadCustomHeaders(
@@ -279,7 +261,7 @@ JSON;
 
         $b64_file_contents = base64_encode( $this->local_file_contents );
 
-        if ( isset( $this->settings['ghCommitMessage'] ) ) {
+        if ( isset( $this->gh_commit_message ) ) {
             $commit_message = str_replace(
                 array(
                     '%ACTION%',
@@ -289,7 +271,7 @@ JSON;
                     $action,
                     $this->target_path,
                 ),
-                $this->settings['ghCommitMessage']
+                $this->gh_commit_message
             );
         } else {
             $commit_message = 'WP2Static ' .
@@ -301,13 +283,13 @@ JSON;
             $post_options = array(
                 'message' => $commit_message,
                 'content' => $b64_file_contents,
-                'branch' => $this->settings['ghBranch'],
+                'branch' => $this->gh_branch,
                 'sha' => $existing_sha,
             );
 
             $headers = array(
                 'Authorization: ' .
-                        'token ' . $this->settings['ghToken'],
+                        'token ' . $this->gh_token,
             );
 
             $this->client->putWithJSONPayloadCustomHeaders(
@@ -340,7 +322,7 @@ JSON;
 
         $b64_file_contents = base64_encode( $this->local_file_contents );
 
-        if ( isset( $this->settings['ghCommitMessage'] ) ) {
+        if ( isset( $this->gh_commit_message ) ) {
             $commit_message = str_replace(
                 array(
                     '%ACTION%',
@@ -350,7 +332,7 @@ JSON;
                     $action,
                     $this->target_path,
                 ),
-                $this->settings['ghCommitMessage']
+                $this->gh_commit_message
             );
         } else {
             $commit_message = 'WP2Static ' .
@@ -362,12 +344,12 @@ JSON;
             $post_options = array(
                 'message' => $commit_message,
                 'content' => $b64_file_contents,
-                'branch' => $this->settings['ghBranch'],
+                'branch' => $this->gh_branch,
             );
 
             $headers = array(
                 'Authorization: ' .
-                        'token ' . $this->settings['ghToken'],
+                        'token ' . $this->gh_token,
             );
 
             $this->client->putWithJSONPayloadCustomHeaders(
@@ -395,4 +377,4 @@ JSON;
     }
 }
 
-$github = new WP2Static_GitHub();
+$github = new GitHub();
